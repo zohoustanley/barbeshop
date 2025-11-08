@@ -972,8 +972,8 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
     // Calcul des jours affichés
     $days_ahead  = isset($planning['days_ahead']) ? max(1, intval($planning['days_ahead'])) : 30;
     $open_days   = isset($planning['open_days']) ? (array) $planning['open_days'] : ['1','2','3','4','5','6'];
-    $open_time   = isset($planning['open_time']) ? $planning['open_time'] : '10:00';
-    $close_time  = isset($planning['close_time']) ? $planning['close_time'] : '20:00';
+    $open_time   = $planning['open_time'] ?? '10:00';
+    $close_time  = $planning['close_time'] ?? '20:00';
     $interval    = isset($planning['slot_interval']) ? max(5, intval($planning['slot_interval'])) : 30;
 
     // Générer la liste des jours (timestamps à minuit local)
@@ -1031,7 +1031,7 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
 
         <!-- Choix du collaborateur sous forme de lignes cliquables -->
         <div class="bs-booking-staff-block">
-            <p class="bs-booking-staff-title">Choisir un collaborateur <?php if (count($collaborators) > 1 ) : ?>(optionnel) <?php endif; ?> </p>
+            <p class="bs-booking-staff-title">Choisir un prestataire <?php if (count($collaborators) > 1 ) : ?>(optionnel) <?php endif; ?> </p>
             <div class="bs-booking-staff-options">
                 <!-- Sans préférence -->
 
@@ -1261,12 +1261,12 @@ function barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $d
                 </label>
             </p>
 
-            <p>
-                <label>
-                    <input type="checkbox" name="bs_create_account" value="1">
-                    Créer un compte client avec cet e-mail
-                </label>
-            </p>
+<!--            <p>-->
+<!--                <label>-->
+<!--                    <input type="checkbox" name="bs_create_account" value="1">-->
+<!--                    Créer un compte client avec cet e-mail-->
+<!--                </label>-->
+<!--            </p>-->
 
             <p>
                 <button type="submit" name="barbershop_booking_confirm" class="bs-btn bs-btn-primary">
@@ -1307,7 +1307,7 @@ function barbershop_booking_handle_submit() {
         $slot_still_available = barbershop_is_slot_available($date, $time, $duration, $staff_id);
 
         if (!$slot_still_available) {
-            return '<p class="bs-booking-step-confirm"> Le créneau choisi est déjà réservé pour ce collaborateur. Merci de choisir un autre créneau. </p><br><a href="'
+            return '<p class="bs-booking-step-confirm"> Le créneau choisi est déjà pris pour ce prestataire. Veuillez choisir un autre créneau. </p><br><a href="'
                 . esc_url(add_query_arg(['bs_step' => 2, 'bs_prestation' => $prestation_id, 'bs_staff' => $staff_id,], barbershop_booking_get_current_page_url() ))
                 . '" class="bs-btn">Changer de créneau</a>';
         }
@@ -1317,6 +1317,7 @@ function barbershop_booking_handle_submit() {
     $client_email  = sanitize_email($_POST['bs_client_email'] ?? '');
     $client_phone  = sanitize_text_field($_POST['bs_client_phone'] ?? '');
     $client_note   = sanitize_textarea_field($_POST['bs_client_note'] ?? '');
+    $client_msg    = isset($_POST['bs_client_message']) ? sanitize_textarea_field($_POST['bs_client_message']) : '';
     $create_account = !empty($_POST['bs_create_account']);
 
     if (!$prestation_id || !$date || !$time || !$client_name || !$client_email) {
@@ -1370,7 +1371,16 @@ function barbershop_booking_handle_submit() {
         update_post_meta($reservation_id, '_barbershop_reservation_client_user_id', $client_user_id);
     }
 
-    // TODO : envoyer un e-mail de confirmation au client et au salon
+    barbershop_send_booking_emails($reservation_id, [
+        'prestation_id'  => $prestation_id,
+        'staff_id'       => $staff_id,
+        'date'           => $date,
+        'time'           => $time,
+        'duration'       => $duration,
+        'client_name'    => $client_name,
+        'client_email'   => $client_email,
+        'client_message' => $client_msg,
+    ]);
 
     ob_start();
     ?>
@@ -1381,6 +1391,139 @@ function barbershop_booking_handle_submit() {
     <?php
     return ob_get_clean();
 }
+
+/**
+ * Envoie les e-mails de confirmation (admin + client) après une réservation.
+ *
+ * @param int   $reservation_id  ID du post bs_reservation
+ * @param array $data            Données utiles (prestation, staff, date, time, client, etc.)
+ */
+function barbershop_send_booking_emails($reservation_id, array $data = []) {
+    if (!$reservation_id || get_post_type($reservation_id) !== 'bs_reservation') {
+        return;
+    }
+
+    // Données brutes
+    $prestation_id   = isset($data['prestation_id']) ? (int) $data['prestation_id'] : 0;
+    $staff_id        = isset($data['staff_id']) ? (int) $data['staff_id'] : 0;
+    $date            = $data['date'] ?? get_post_meta($reservation_id, '_barbershop_reservation_date', true);
+    $time            = $data['time'] ?? get_post_meta($reservation_id, '_barbershop_reservation_time', true);
+    $duration        = isset($data['duration']) ? (int) $data['duration'] : (int) get_post_meta($reservation_id, '_barbershop_reservation_duration', true);
+    $client_name     = $data['client_name'] ?? get_post_meta($reservation_id, '_barbershop_reservation_client_name', true);
+    $client_email    = $data['client_email'] ?? get_post_meta($reservation_id, '_barbershop_reservation_client_email', true);
+    $client_message  = $data['client_message'] ?? get_post_meta($reservation_id, '_barbershop_reservation_client_message', true);
+
+    $prestation_title = $prestation_id ? get_the_title($prestation_id) : '';
+    $staff_name       = $staff_id ? get_the_title($staff_id) : __('Sans préférence', 'barbershop');
+
+    // Formatage date/heure pour l'email
+    try {
+        $dt = new DateTime($date . ' ' . $time);
+        // ex: Lundi 02 novembre 2025 à 14:30
+        $date_formatted = date_i18n('l d F Y', $dt->getTimestamp());
+        $time_formatted = date_i18n('H:i', $dt->getTimestamp());
+    } catch (Exception $e) {
+        $date_formatted = $date;
+        $time_formatted = $time;
+    }
+
+    $duration_txt = $duration > 0 ? $duration . ' min' : '';
+
+    // Email du salon (option personnalisable sinon admin_email)
+    $admin_email = get_option('barbershop_booking_email');
+    if (empty($admin_email) || !is_email($admin_email)) {
+        $admin_email = get_option('admin_email');
+    }
+
+    $site_name = wp_specialchars_decode(get_bloginfo('name'), ENT_QUOTES);
+
+    // --------------------------------
+    // 1) Email à l’ADMIN
+    // --------------------------------
+    $subject_admin = sprintf(
+        __('[%s] Nouvelle réservation de rendez-vous', 'barbershop'),
+        $site_name
+    );
+
+    $message_admin  = '<p>Une nouvelle réservation a été confirmée.</p>';
+    $message_admin .= '<p><strong>Détails du rendez-vous :</strong></p>';
+    $message_admin .= '<ul>';
+    if ($prestation_title) {
+        $message_admin .= '<li><strong>Prestation :</strong> ' . esc_html($prestation_title) . '</li>';
+    }
+    $message_admin .= '<li><strong>Avec :</strong> ' . esc_html($staff_name) . '</li>';
+    $message_admin .= '<li><strong>Date :</strong> ' . esc_html($date_formatted) . '</li>';
+    $message_admin .= '<li><strong>Heure :</strong> ' . esc_html($time_formatted) . '</li>';
+    if ($duration_txt) {
+        $message_admin .= '<li><strong>Durée :</strong> ' . esc_html($duration_txt) . '</li>';
+    }
+    $message_admin .= '</ul>';
+
+    $message_admin .= '<p><strong>Client :</strong></p>';
+    $message_admin .= '<ul>';
+    if ($client_name) {
+        $message_admin .= '<li><strong>Nom :</strong> ' . esc_html($client_name) . '</li>';
+    }
+    if ($client_email) {
+        $message_admin .= '<li><strong>Email :</strong> ' . esc_html($client_email) . '</li>';
+    }
+    if ($client_message) {
+        $message_admin .= '<li><strong>Message :</strong><br>' . nl2br(esc_html($client_message)) . '</li>';
+    }
+    $message_admin .= '</ul>';
+
+    $message_admin .= '<p><em>ID de la réservation :</em> ' . (int) $reservation_id . '</p>';
+
+    $headers_admin = [
+        'Content-Type: text/html; charset=UTF-8',
+    ];
+
+    // On met le client en Reply-To si possible
+    if (!empty($client_email) && is_email($client_email)) {
+        $headers_admin[] = 'Reply-To: ' . $client_name . ' <' . $client_email . '>';
+    }
+
+    wp_mail($admin_email, $subject_admin, $message_admin, $headers_admin);
+
+    // --------------------------------
+    // 2) Email au CLIENT
+    // --------------------------------
+    if (!empty($client_email) && is_email($client_email)) {
+        $subject_client = sprintf(
+            __('Confirmation de votre rendez-vous - %s', 'barbershop'),
+            $site_name
+        );
+
+        $message_client  = '<p>Bonjour ' . esc_html($client_name) . ',</p>';
+        $message_client .= '<p>Merci pour votre réservation. Voici un récapitulatif de votre rendez-vous :</p>';
+        $message_client .= '<ul>';
+        if ($prestation_title) {
+            $message_client .= '<li><strong>Prestation :</strong> ' . esc_html($prestation_title) . '</li>';
+        }
+        $message_client .= '<li><strong>Rendez-vous avec :</strong> ' . esc_html($staff_name) . '</li>';
+        $message_client .= '<li><strong>Date :</strong> ' . esc_html($date_formatted) . '</li>';
+        $message_client .= '<li><strong>Heure :</strong> ' . esc_html($time_formatted) . '</li>';
+        if ($duration_txt) {
+            $message_client .= '<li><strong>Durée théorique :</strong> ' . esc_html($duration_txt) . '</li>';
+        }
+        $message_client .= '</ul>';
+
+        if ($client_message) {
+            $message_client .= '<p><strong>Votre message :</strong><br>' . nl2br(esc_html($client_message)) . '</p>';
+        }
+
+        $message_client .= '<p>Si vous souhaitez modifier ou annuler ce rendez-vous, merci de nous contacter.</p>';
+        $message_client .= '<p>Cordialement,<br>' . esc_html($site_name) . '</p>';
+
+        $headers_client = [
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . $site_name . ' <' . $admin_email . '>',
+        ];
+
+        wp_mail($client_email, $subject_client, $message_client, $headers_client);
+    }
+}
+
 
 /**
  * Colonnes personnalisées pour le post type "barbershop_reservation"
@@ -1481,7 +1624,7 @@ function barbershop_reservation_conflict_admin_notice() {
         <div class="notice notice-error">
             <p>
                 Impossible d'enregistrer cette réservation :
-                le collaborateur a déjà un rendez-vous sur ce créneau
+                le prestataire a déjà un rendez-vous sur ce créneau
                 (même date, plage horaire qui se chevauche).
             </p>
         </div>
