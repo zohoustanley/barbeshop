@@ -1078,9 +1078,42 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
             <?php else : ?>
                 <div class="bs-booking-grid">
                     <div class="bs-booking-grid-header">
+                        <?php
+
+                        $jours = [
+                            'Mon' => 'Lundi',
+                            'Tue' => 'Mardi',
+                            'Wed' => 'Mercredi',
+                            'Thu' => 'Jeudi',
+                            'Fri' => 'Vendredi',
+                            'Sat' => 'Samedi',
+                            'Sun' => 'Dimanche'
+                        ];
+
+                        $mois = [
+                            'Jan' => 'Jan',
+                            'Feb' => 'Fév',
+                            'Mar' => 'Mar',
+                            'Apr' => 'Avr',
+                            'May' => 'Mai',
+                            'Jun' => 'Juin',
+                            'Jul' => 'Juil',
+                            'Aug' => 'Août',
+                            'Sep' => 'Sep',
+                            'Oct' => 'Oct',
+                            'Nov' => 'Nov',
+                            'Dec' => 'Déc'
+                        ];
+
+                        ?>
                         <?php foreach ($days as $day) : ?>
                             <div class="bs-booking-grid-day">
-                                <?php echo esc_html($day->format('d/m')); ?>
+                                <?php
+                                $day_short = $day->format('D');
+                                $month_short = $day->format('M');
+                                ?>
+                                <?php echo esc_html($jours[$day_short] ?? $day_short); ?><br>
+                                <?php echo esc_html($day->format('d') . ' ' . ($mois[$month_short] ?? $month_short)); ?>
                             </div>
                         <?php endforeach; ?>
                     </div>
