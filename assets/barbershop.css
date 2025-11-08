@@ -1,0 +1,329 @@
+/* ---------- WRAPPER GLOBAL ---------- */
+
+.bs-booking-wrapper {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1.5rem;
+    color: #2c3e50;
+}
+
+.bs-booking-title {
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #2c3e50;
+}
+
+/* ---------- CATÉGORIES DE PRESTATIONS ---------- */
+
+.bs-booking-category-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.5rem;
+}
+
+.bs-booking-category {
+    background: #ffffff;
+    border-radius: 1rem;
+    padding: 1.25rem 1.25rem;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.06);
+    border: 1px solid #e5e7eb;
+}
+
+.bs-booking-category-title {
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin: 0 0 .5rem;
+    color: #2c3e50;
+}
+
+.bs-booking-category-desc {
+    margin: 0 0 1rem;
+    font-size: .9rem;
+    color: #6b7280;
+}
+
+/* ---------- LISTE DES PRESTATIONS (STYLE TABLEAU) ---------- */
+
+.bs-booking-prestation-list {
+    display: flex;
+    flex-direction: column;
+    gap: .35rem;
+}
+
+.bs-booking-prestation-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: .6rem .4rem;
+    border-radius: .5rem;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.bs-booking-prestation-item:last-child {
+    border-bottom: none;
+}
+
+.bs-prestation-text {
+    flex: 1;
+    min-width: 0;
+    color: #2c3e50;
+}
+
+.bs-prestation-title {
+    margin: 0 0 .15rem;
+    font-size: .95rem;
+    font-weight: 600;
+}
+
+.bs-prestation-desc {
+    margin: 0;
+    font-size: .8rem;
+    color: #6b7280;
+}
+
+.bs-prestation-duration {
+    margin: .15rem 0 0;
+    font-size: .75rem;
+    color: #9ca3af;
+}
+
+.bs-prestation-action {
+    flex-shrink: 0;
+}
+
+/* Boutons génériques */
+
+.bs-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    padding: .45rem 1.2rem;
+    font-size: .85rem;
+    border: 1px solid #d1d5db;
+    background: #f9fafb;
+    cursor: pointer;
+    text-decoration: none;
+    color: #111827;
+}
+
+.bs-btn-primary {
+    background: #111827;
+    color: #ffffff;
+    border-color: #111827;
+}
+
+/* ---------- STEP 2 : GRID CALENDRIER ---------- */
+
+/* ---------- STEP 2 : COLLABORATEURS EN LIGNES CLIQUABLES ---------- */
+
+.bs-booking-staff-block {
+    margin-bottom: 1.5rem;
+}
+
+.bs-booking-staff-title {
+    font-size: .9rem;
+    font-weight: 600;
+    margin: 0 0 .4rem;
+}
+
+.bs-booking-staff-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .45rem;
+}
+
+.bs-booking-staff-form-inline {
+    margin: 0;
+}
+
+.bs-staff-option {
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    padding: .35rem .9rem;
+    font-size: .8rem;
+    background: #f9fafb;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.bs-staff-option:hover {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #111827;
+}
+
+.bs-staff-option--active {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #111827;
+}
+
+/* Titre au-dessus du calendrier de créneaux */
+.bs-booking-slot-title {
+    font-size: .95rem;
+    font-weight: 600;
+    margin: 1rem 0 .5rem;
+}
+
+.bs-booking-prestation-selected {
+    font-size: .95rem;
+    margin-bottom: 1rem;
+}
+
+.bs-booking-staff-form select {
+    min-width: 220px;
+    padding: .35rem .5rem;
+}
+
+/* Wrapper pour scroller horizontalement sur mobile si besoin */
+.bs-booking-grid-wrapper {
+    margin-top: 1.5rem;
+    overflow-x: auto;
+    padding-bottom: .75rem;
+}
+
+/* Conteneur de la grille */
+.bs-booking-grid {
+    min-width: 600px; /* pour éviter d'écraser tout sur très petit écran */
+    border-radius: .75rem;
+    border: 1px solid #e5e7eb;
+    background: #ffffff;
+    box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+}
+
+/* Ligne des dates (en colonnes) */
+.bs-booking-grid-header {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(110px, 1fr);
+    border-bottom: 1px solid #e5e7eb;
+    background: #f9fafb;
+}
+
+.bs-booking-grid-day {
+    padding: .5rem .4rem;
+    text-align: center;
+    font-size: .85rem;
+    font-weight: 600;
+    border-right: 1px solid #e5e7eb;
+}
+
+.bs-booking-grid-day:last-child {
+    border-right: none;
+}
+
+/* Corps : lignes de créneaux */
+.bs-booking-grid-body {
+    display: flex;
+    flex-direction: column;
+}
+
+.bs-booking-grid-row {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(110px, 1fr);
+    border-top: 1px solid #f3f4f6;
+}
+
+.bs-booking-grid-cell {
+    padding: .35rem .25rem;
+    text-align: center;
+    border-right: 1px solid #f3f4f6;
+}
+
+.bs-booking-grid-row .bs-booking-grid-cell:last-child {
+    border-right: none;
+}
+
+/* Bouton de créneau */
+.bs-slot-btn {
+    width: 100%;
+    border-radius: 999px;
+    border: 1px solid #d1d5db;
+    padding: .25rem 0;
+    font-size: .8rem;
+    background: #f9fafb;
+    cursor: pointer;
+}
+
+.bs-slot-btn:hover {
+    background: #111827;
+    color: #f9fafb;
+    border-color: #111827;
+}
+
+/* Créneau indisponible (pour plus tard) */
+.bs-slot-unavailable {
+    display: inline-block;
+    width: 100%;
+    padding: .25rem 0;
+    font-size: .8rem;
+    color: #9ca3af;
+}
+
+/* ---------- STEP 3 : RÉCAP & FORMULAIRE ---------- */
+
+.bs-booking-summary {
+    background: #ffffff;
+    border-radius: .75rem;
+    padding: 1rem 1.25rem;
+    border: 1px solid #e5e7eb;
+    margin-bottom: 1.25rem;
+    font-size: .9rem;
+}
+
+.bs-booking-summary p {
+    margin: .25rem 0;
+}
+
+.bs-booking-client-form input[type="text"],
+.bs-booking-client-form input[type="email"],
+.bs-booking-client-form textarea {
+    width: 100%;
+    max-width: 500px;
+    padding: .4rem .5rem;
+    border-radius: .35rem;
+    border: 1px solid #d1d5db;
+    font-size: .9rem;
+    margin-top: 0.5rem;
+}
+
+/* ---------- RESPONSIVE ---------- */
+
+@media (max-width: 768px) {
+    .bs-booking-wrapper {
+        padding: 1rem;
+    }
+
+    .bs-booking-category-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .bs-booking-prestation-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .bs-prestation-action {
+        align-self: stretch;
+    }
+
+    .bs-prestation-action .bs-btn-primary {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .bs-booking-grid {
+        min-width: 100%;
+    }
+}
+
+.bs-booking-step .bs-booking-step-confirm h3{
+    color: #111827 !important;
+}
