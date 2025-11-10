@@ -1726,8 +1726,10 @@ function barbershop_send_booking_emails($reservation_id, array $data = []) {
     $duration_txt = $duration > 0 ? $duration . ' min' : '';
 
     // Email du salon (option personnalisable sinon admin_email)
-    $admin_email = get_option('barbershop_booking_email');
-    if (empty($admin_email) || !is_email($admin_email)) {
+    $settings = get_option('pbcore_settings', []);
+    if (empty($settings) || is_email($settings['barbershop_booking_email'])) {
+        $admin_email = $settings['barbershop_booking_email'];
+    }else{
         $admin_email = get_option('admin_email');
     }
 
@@ -1772,6 +1774,7 @@ function barbershop_send_booking_emails($reservation_id, array $data = []) {
 
     $headers_admin = [
         'Content-Type: text/html; charset=UTF-8',
+        'From: ' . $site_name . ' <contact@plaisirbarber90.fr>',
     ];
 
     // On met le client en Reply-To si possible
@@ -1813,7 +1816,8 @@ function barbershop_send_booking_emails($reservation_id, array $data = []) {
 
         $headers_client = [
             'Content-Type: text/html; charset=UTF-8',
-            'From: ' . $site_name . ' <' . $admin_email . '>',
+            'From: ' . $site_name . ' <contact@plaisirbarber90.fr>',
+            'Reply-To: ' . $admin_email,
         ];
 
         wp_mail($client_email, $subject_client, $message_client, $headers_client);
