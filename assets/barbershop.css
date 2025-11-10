@@ -228,11 +228,10 @@
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(110px, 1fr);
-    border-top: 1px solid #f3f4f6;
 }
 
 .bs-booking-grid-cell {
-    padding: .35rem .25rem;
+    padding: .50rem .25rem;
     text-align: center;
     border-right: 1px solid #f3f4f6;
 }
@@ -244,10 +243,10 @@
 /* Bouton de créneau */
 .bs-slot-btn {
     width: 100%;
-    border-radius: 999px;
+    border-radius: 5px;
     border: 1px solid #d1d5db;
-    padding: .25rem 0;
-    font-size: .8rem;
+    padding: .35rem 0;
+    font-size: .9rem;
     background: #f9fafb;
     cursor: pointer;
 }

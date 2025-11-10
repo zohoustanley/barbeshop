@@ -33,12 +33,18 @@ function barbershop_get_custom_caps() {
     return [
         'collaborateur' => [
             'read'                         => true,
-            'barbershop_read_reservations' => true,
+            'barbershop_read_reservations' => true,  // consulter les réservations
         ],
         'manager' => [
             'read'                               => true,
-            'barbershop_read_reservations'       => true,
-            'barbershop_manage_all_reservations' => true,
+            'barbershop_read_reservations'       => true,  // voir la liste
+            'barbershop_manage_all_reservations' => true,  // créer / éditer / supprimer
+
+            // Gestion des utilisateurs
+            'list_users'   => true,
+            'edit_users'   => true,
+            'delete_users' => true,
+            'create_users' => true,
         ],
     ];
 }
@@ -80,6 +86,15 @@ function barbershop_activate() {
     if ($manager_role) {
         foreach ($caps['manager'] as $cap => $grant) {
             $manager_role->add_cap($cap, $grant);
+        }
+    }
+
+    if ($admin_role = get_role('administrator')) {
+        foreach ($caps['collaborateur'] as $cap => $grant) {
+            $admin_role->add_cap($cap, $grant);
+        }
+        foreach ($caps['manager'] as $cap => $grant) {
+            $admin_role->add_cap($cap, $grant);
         }
     }
 }
@@ -154,6 +169,7 @@ function barbershop_register_post_types() {
     ]);
 
     // CPT Réservations
+    // CPT Réservations
     register_post_type('bs_reservation', [
         'labels' => [
             'name'               => 'Réservations',
@@ -173,7 +189,35 @@ function barbershop_register_post_types() {
         'supports'     => ['title'],
         'has_archive'  => false,
         'show_in_rest' => false,
+
+        // On ne touche PAS à map_meta_cap / capability_type,
+        // on mappe juste ce que WP regarde dans l’admin.
+        'capabilities' => [
+            // Liste des réservations / menu
+            'edit_posts'           => 'barbershop_read_reservations',
+
+            // Création / publication → managers seulement
+            'publish_posts'        => 'barbershop_manage_all_reservations',
+            'create_posts'         => 'barbershop_manage_all_reservations',
+
+            // Lecture de la liste privée
+            'read_private_posts'   => 'barbershop_manage_all_reservations',
+
+            // Édition / suppression → managers seulement
+            'edit_post'            => 'barbershop_manage_all_reservations',
+            'edit_others_posts'    => 'barbershop_manage_all_reservations',
+            'edit_published_posts' => 'barbershop_manage_all_reservations',
+            'delete_post'          => 'barbershop_manage_all_reservations',
+            'delete_posts'         => 'barbershop_manage_all_reservations',
+            'delete_others_posts'  => 'barbershop_manage_all_reservations',
+            'delete_private_posts' => 'barbershop_manage_all_reservations',
+            'delete_published_posts' => 'barbershop_manage_all_reservations',
+
+            // Lecture basique
+            'read'                 => 'read',
+        ],
     ]);
+
 }
 
 
@@ -446,14 +490,6 @@ function barbershop_save_reservation_meta($post_id) {
     update_post_meta($post_id, '_barbershop_reservation_date', $date);
     update_post_meta($post_id, '_barbershop_reservation_time', $time);
     update_post_meta($post_id, '_barbershop_reservation_duration', $duration);
-
-    /**
-     * TODO (planning) :
-     * - calculer datetime début/fin (timestamp) à partir de date + time + durée
-     * - vérifier qu'il n’existe pas déjà une réservation pour ce collaborateur
-     *   sur un créneau qui se chevauche
-     * - vérifier que la date/heure tombe dans ses plages de dispo
-     */
 }
 
 /**
@@ -465,19 +501,85 @@ function barbershop_save_reservation_meta($post_id) {
 
 function barbershop_get_planning_defaults() {
     return [
-        'days_ahead'    => 30,        // nombre de jours à afficher
-        'open_time'     => '10:00',   // heure d'ouverture (HH:MM)
-        'close_time'    => '20:00',   // heure de fermeture (HH:MM)
-        'slot_interval' => 30,        // minutes (15, 30, 60, etc.)
-        'open_days'     => ['1','2','3','4','5','6'], // 1=lundi ... 7=dimanche (PHP date('N'))
+        'days_ahead'        => 30,        // nombre de jours à afficher
+        'open_time'         => '10:00',   // (fallback) heure d'ouverture globale
+        'close_time'        => '20:00',   // (fallback) heure de fermeture globale
+        'slot_interval'     => 30,        // minutes (15, 30, 60, etc.)
+        'open_days'         => ['1','2','3','4','5','6', '7'], // fallback 1=lundi ... 7=dimanche
+        'min_delay_minutes' => 180,
+        'day_hours'         => [
+            // 1 = lundi, etc.
+            '1' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '2' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '3' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '4' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '5' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '6' => ['enabled' => true,  'open' => '10:00', 'close' => '18:00'],
+            '7' => ['enabled' => false, 'open' => '10:00', 'close' => '18:00'],
+        ],
     ];
 }
 
+
 function barbershop_get_planning_settings() {
     $defaults = barbershop_get_planning_defaults();
-    $settings  = get_option('barbershop_planning', []);
-    return wp_parse_args($settings, $defaults);
+    $settings = get_option('barbershop_planning', []);
+
+    if (!is_array($settings)) {
+        $settings = [];
+    }
+
+    $settings = wp_parse_args($settings, $defaults);
+
+    // Normalisation de base
+    $settings['days_ahead']        = max(1, (int) $settings['days_ahead']);
+    $settings['slot_interval']     = max(5, (int) $settings['slot_interval']);
+    $settings['min_delay_minutes'] = max(0, (int) $settings['min_delay_minutes']);
+
+    // Normaliser open_days (fallback)
+    $settings['open_days'] = array_map('strval', (array) $settings['open_days']);
+
+    // Normaliser day_hours
+    if (empty($settings['day_hours']) || !is_array($settings['day_hours'])) {
+        $settings['day_hours'] = [];
+    }
+
+    $normalized_day_hours = [];
+    foreach (['1','2','3','4','5','6','7'] as $day_num) {
+        $conf = isset($settings['day_hours'][$day_num]) && is_array($settings['day_hours'][$day_num])
+            ? $settings['day_hours'][$day_num]
+            : [];
+
+        $enabled = isset($conf['enabled']) ? (bool) $conf['enabled'] : in_array($day_num, $settings['open_days'], true);
+        $open    = !empty($conf['open'])  ? $conf['open']  : $settings['open_time'];
+        $close   = !empty($conf['close']) ? $conf['close'] : $settings['close_time'];
+
+        // Sécurité simple sur le format HH:MM
+        if (!preg_match('/^\d{2}:\d{2}$/', $open)) {
+            $open = $defaults['open_time'];
+        }
+        if (!preg_match('/^\d{2}:\d{2}$/', $close)) {
+            $close = $defaults['close_time'];
+        }
+
+        $normalized_day_hours[$day_num] = [
+            'enabled' => $enabled,
+            'open'    => $open,
+            'close'   => $close,
+        ];
+    }
+
+    $settings['day_hours'] = $normalized_day_hours;
+    $settings['open_days'] = array_values(
+        array_filter(
+            array_keys($settings['day_hours']),
+            fn($d) => !empty($settings['day_hours'][$d]['enabled'])
+        )
+    );
+
+    return $settings;
 }
+
 
 /**
  * Vérifie si un créneau est disponible pour un collaborateur donné.
@@ -669,8 +771,6 @@ function barbershop_is_slot_available_for_reservation($reservation_id, $date, $t
 
 add_action('admin_menu', 'barbershop_add_planning_page');
 function barbershop_add_planning_page() {
-    // Pour l’instant réservé aux admins (manage_options).
-    // On pourra plus tard utiliser une capability custom pour les managers.
     add_options_page(
         'Planning Barbershop',
         'Planning Barbershop',
@@ -678,6 +778,7 @@ function barbershop_add_planning_page() {
         'barbershop-planning',
         'barbershop_render_planning_page'
     );
+
 }
 
 function barbershop_render_planning_page() {
@@ -688,14 +789,82 @@ function barbershop_render_planning_page() {
     if (isset($_POST['barbershop_planning_save'])) {
         check_admin_referer('barbershop_planning_save');
 
-        $settings                    = barbershop_get_planning_settings();
-        $settings['days_ahead']      = max(1, intval($_POST['days_ahead'] ?? 30));
-        $settings['open_time']       = sanitize_text_field($_POST['open_time'] ?? '10:00');
-        $settings['close_time']      = sanitize_text_field($_POST['close_time'] ?? '20:00');
-        $settings['slot_interval']   = max(5, intval($_POST['slot_interval'] ?? 30));
+        $settings = barbershop_get_planning_settings();
 
-        $open_days = isset($_POST['open_days']) && is_array($_POST['open_days']) ? array_map('sanitize_text_field', $_POST['open_days']) : [];
-        $settings['open_days'] = $open_days ?: ['1','2','3','4','5','6'];
+        // Nombre de jours affichés
+        $settings['days_ahead']    = max(1, intval($_POST['days_ahead'] ?? 30));
+        $settings['slot_interval'] = max(5, intval($_POST['slot_interval'] ?? 30));
+
+        // Délai minimum
+        $min_delay = isset($_POST['min_delay_minutes']) ? (int) $_POST['min_delay_minutes'] : 180;
+        if ($min_delay < 0) {
+            $min_delay = 0;
+        }
+        $settings['min_delay_minutes'] = $min_delay;
+
+        // Nouveaux horaires par jour
+        $day_hours_input = isset($_POST['day_hours']) && is_array($_POST['day_hours'])
+            ? $_POST['day_hours']
+            : [];
+
+        $days_labels = [
+            '1' => 'Lundi',
+            '2' => 'Mardi',
+            '3' => 'Mercredi',
+            '4' => 'Jeudi',
+            '5' => 'Vendredi',
+            '6' => 'Samedi',
+            '7' => 'Dimanche',
+        ];
+
+        $normalized_day_hours = [];
+        $open_days = [];
+
+        foreach ($days_labels as $day_num => $label) {
+            $row = $day_hours_input[$day_num] ?? [];
+
+            $enabled = !empty($row['enabled']);
+            $open    = isset($row['open'])  ? sanitize_text_field($row['open'])  : '';
+            $close   = isset($row['close']) ? sanitize_text_field($row['close']) : '';
+
+            // Fallback simple si vide
+            if (!preg_match('/^\d{2}:\d{2}$/', $open)) {
+                $open = '10:00';
+            }
+            if (!preg_match('/^\d{2}:\d{2}$/', $close)) {
+                $close = '20:00';
+            }
+
+            $normalized_day_hours[$day_num] = [
+                'enabled' => $enabled,
+                'open'    => $open,
+                'close'   => $close,
+            ];
+
+            if ($enabled) {
+                $open_days[] = $day_num;
+            }
+        }
+
+        $settings['day_hours'] = $normalized_day_hours;
+        $settings['open_days'] = $open_days;
+
+        // Pour compat : on peut garder une plage globale "min/max"
+        if (!empty($open_days)) {
+            $global_open  = '23:59';
+            $global_close = '00:00';
+            foreach ($open_days as $day_num) {
+                $conf = $normalized_day_hours[$day_num];
+                if ($conf['open'] < $global_open) {
+                    $global_open = $conf['open'];
+                }
+                if ($conf['close'] > $global_close) {
+                    $global_close = $conf['close'];
+                }
+            }
+            $settings['open_time']  = $global_open;
+            $settings['close_time'] = $global_close;
+        }
 
         update_option('barbershop_planning', $settings);
 
@@ -720,7 +889,7 @@ function barbershop_render_planning_page() {
                 </tr>
 
                 <tr>
-                    <th scope="row">Jours d'ouverture</th>
+                    <th scope="row">Jours &amp; horaires d'ouverture</th>
                     <td>
                         <?php
                         $days_labels = [
@@ -732,31 +901,50 @@ function barbershop_render_planning_page() {
                             '6' => 'Samedi',
                             '7' => 'Dimanche',
                         ];
-                        foreach ($days_labels as $value => $label) :
-                            ?>
-                            <label style="display:inline-block;margin-right:10px;">
-                                <input type="checkbox" name="open_days[]" value="<?php echo esc_attr($value); ?>"
-                                    <?php checked(in_array($value, (array) $s['open_days'], true)); ?>>
-                                <?php echo esc_html($label); ?>
-                            </label>
-                        <?php endforeach; ?>
-                        <p class="description">Jours où le salon est ouvert pour les réservations.</p>
-                    </td>
-                </tr>
-
-                <tr>
-                    <th scope="row"><label for="open_time">Heure d'ouverture</label></th>
-                    <td>
-                        <input type="time" name="open_time" id="open_time"
-                               value="<?php echo esc_attr($s['open_time']); ?>">
-                    </td>
-                </tr>
-
-                <tr>
-                    <th scope="row"><label for="close_time">Heure de fermeture</label></th>
-                    <td>
-                        <input type="time" name="close_time" id="close_time"
-                               value="<?php echo esc_attr($s['close_time']); ?>">
+                        $day_hours = isset($s['day_hours']) && is_array($s['day_hours']) ? $s['day_hours'] : [];
+                        ?>
+                        <table class="widefat striped" style="max-width:600px;">
+                            <thead>
+                            <tr>
+                                <th>Jour</th>
+                                <th>Ouvert</th>
+                                <th>De</th>
+                                <th>À</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <?php foreach ($days_labels as $day_num => $label) :
+                                $conf   = $day_hours[$day_num] ?? ['enabled' => false, 'open' => '10:00', 'close' => '20:00'];
+                                $enabled = !empty($conf['enabled']);
+                                $open    = $conf['open'] ?? '10:00';
+                                $close   = $conf['close'] ?? '20:00';
+                                ?>
+                                <tr>
+                                    <td><?php echo esc_html($label); ?></td>
+                                    <td>
+                                        <input type="checkbox"
+                                               name="day_hours[<?php echo esc_attr($day_num); ?>][enabled]"
+                                               value="1"
+                                            <?php checked($enabled); ?>>
+                                    </td>
+                                    <td>
+                                        <input type="time"
+                                               name="day_hours[<?php echo esc_attr($day_num); ?>][open]"
+                                               value="<?php echo esc_attr($open); ?>">
+                                    </td>
+                                    <td>
+                                        <input type="time"
+                                               name="day_hours[<?php echo esc_attr($day_num); ?>][close]"
+                                               value="<?php echo esc_attr($close); ?>">
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                        <p class="description">
+                            Exemple : Lundi 09:00–17:00, Mardi 09:00–20:00, etc.
+                            Décochez un jour pour le marquer comme fermé.
+                        </p>
                     </td>
                 </tr>
 
@@ -769,6 +957,28 @@ function barbershop_render_planning_page() {
                         <p class="description">Exemple : 30 → créneaux 10h, 10h30, 11h, 11h30, etc.</p>
                     </td>
                 </tr>
+
+                <tr>
+                    <th scope="row">
+                        <label for="barbershop_min_delay_minutes">
+                            Délai minimum avant un rendez-vous (en minutes)
+                        </label>
+                    </th>
+                    <td>
+                        <input
+                                type="number"
+                                id="barbershop_min_delay_minutes"
+                                name="min_delay_minutes"
+                                value="<?php echo esc_attr($s['min_delay_minutes']); ?>"
+                                min="0"
+                                step="5"
+                        >
+                        <p class="description">
+                            Exemple : 180 = n’afficher les créneaux qu’à partir de l’heure actuelle + 3 heures.
+                        </p>
+                    </td>
+                </tr>
+
             </table>
 
             <p class="submit">
@@ -827,11 +1037,11 @@ function barbershop_booking_shortcode($atts) {
  */
 function barbershop_booking_step1_prestation() {
     $current_url = barbershop_booking_get_current_page_url();
-    $staff_id = isset($_GET['bs_staff']) ? intval($_GET['bs_staff']) : 0;
+    $staff_id    = isset($_GET['bs_staff']) ? intval($_GET['bs_staff']) : 0;
 
     // Récupérer les catégories de prestations
     $categories = get_terms([
-        'taxonomy'   => 'bs_prestation_category',  // adapte si ton slug diffère
+        'taxonomy'   => 'bs_prestation_category',
         'hide_empty' => false,
         'orderby'    => 'name',
         'order'      => 'ASC',
@@ -860,13 +1070,16 @@ function barbershop_booking_step1_prestation() {
                         ],
                     ]);
 
-                    // ✅ Ne pas afficher la catégorie si aucun résultat
                     if (!$prestations->have_posts()) {
                         wp_reset_postdata();
                         continue;
                     }
-                    ?>
 
+                    // On bufferise la sortie pour pouvoir supprimer la catégorie
+                    // si aucune prestation n'est visible pour ce collaborateur.
+                    ob_start();
+                    $has_visible_prestation = false;
+                    ?>
                     <section class="bs-booking-category">
                         <h3 class="bs-booking-category-title">
                             <?php echo esc_html($cat->name); ?>
@@ -883,7 +1096,21 @@ function barbershop_booking_step1_prestation() {
                                 $pid      = get_the_ID();
                                 $price    = get_post_meta($pid, '_barbershop_prestation_price', true);
                                 $duration = get_post_meta($pid, '_barbershop_prestation_duration', true);
-                                $url      = add_query_arg([
+
+                                // 🔍 Filtre par collaborateur présélectionné
+                                if ($staff_id > 0) {
+                                    $allowed_staff_ids = barbershop_get_allowed_staff_for_prestation($pid);
+
+                                    // Si la prestation a une liste restreinte ET que ce collaborateur n’y est pas → on saute
+                                    if (!empty($allowed_staff_ids) && !in_array($staff_id, $allowed_staff_ids, true)) {
+                                        continue;
+                                    }
+                                }
+
+                                // Si on arrive ici, la prestation est visible
+                                $has_visible_prestation = true;
+
+                                $url = add_query_arg([
                                     'bs_step'       => 2,
                                     'bs_prestation' => $pid,
                                     'bs_staff'      => $staff_id,
@@ -909,9 +1136,16 @@ function barbershop_booking_step1_prestation() {
                                 </article>
                             <?php endwhile; ?>
                         </div>
-
-                        <?php wp_reset_postdata(); ?>
                     </section>
+                    <?php
+                    $category_html = ob_get_clean();
+                    wp_reset_postdata();
+
+                    // Si au final aucune prestation n’est visible pour cette catégorie, on ne l’affiche pas
+                    if ($has_visible_prestation) {
+                        echo $category_html;
+                    }
+                    ?>
 
                 <?php endforeach; ?>
             </div>
@@ -921,6 +1155,7 @@ function barbershop_booking_step1_prestation() {
     </div>
     <?php
 }
+
 
 function barbershop_booking_get_current_page_url() {
     // 1. Essayer de récupérer l'objet courant (page où le shortcode est affiché)
@@ -970,15 +1205,13 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
     }
 
     // Calcul des jours affichés
-    $days_ahead  = isset($planning['days_ahead']) ? max(1, intval($planning['days_ahead'])) : 30;
-    $open_days   = isset($planning['open_days']) ? (array) $planning['open_days'] : ['1','2','3','4','5','6'];
-    $open_time   = $planning['open_time'] ?? '10:00';
-    $close_time  = $planning['close_time'] ?? '20:00';
-    $interval    = isset($planning['slot_interval']) ? max(5, intval($planning['slot_interval'])) : 30;
+    $days_ahead = isset($planning['days_ahead']) ? max(1, intval($planning['days_ahead'])) : 30;
+    $interval   = isset($planning['slot_interval']) ? max(5, intval($planning['slot_interval'])) : 30;
+    $day_hours  = isset($planning['day_hours']) && is_array($planning['day_hours'])
+        ? $planning['day_hours']
+        : [];
 
-    // Générer la liste des jours (timestamps à minuit local)
-    $days = [];
-
+    // --- Timezone
     $timezone_string = get_option('timezone_string');
     if (function_exists('wp_timezone')) {
         $tz = wp_timezone();
@@ -986,32 +1219,69 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
         $tz = new DateTimeZone($timezone_string ?: 'UTC');
     }
 
+    // --- Liste des jours ouverts
+    $days = [];
     $now = new DateTime('now', $tz);
     $now->setTime(0, 0, 0);
 
     for ($i = 0; $i < $days_ahead; $i++) {
         $d = clone $now;
         $d->modify("+{$i} days");
-        $weekday = $d->format('N'); // 1=lundi ... 7=dimanche
-        if (in_array($weekday, $open_days, true)) {
+        $weekday = $d->format('N'); // 1..7
+
+        $conf = $day_hours[$weekday] ?? null;
+        if ($conf && !empty($conf['enabled'])) {
             $days[] = $d;
         }
     }
 
-    // Générer les créneaux horaires
-    $time_slots = [];
-    if ($open_time && $close_time) {
-        $start = DateTime::createFromFormat('H:i', $open_time, $tz);
-        $end   = DateTime::createFromFormat('H:i', $close_time, $tz);
+    // --- Créneaux master : on prend le min "open" et max "close" sur tous les jours ouverts
+    $global_open  = null;
+    $global_close = null;
 
-        if ($start && $end && $start < $end) {
-            $cursor = clone $start;
-            while ($cursor < $end) {
-                $time_slots[] = $cursor->format('H:i');
-                $cursor->modify("+{$interval} minutes");
-            }
+    foreach ($day_hours as $day_num => $conf) {
+        if (empty($conf['enabled'])) {
+            continue;
+        }
+        $o = $conf['open']  ?? '10:00';
+        $c = $conf['close'] ?? '20:00';
+
+        if (!preg_match('/^\d{2}:\d{2}$/', $o) || !preg_match('/^\d{2}:\d{2}$/', $c)) {
+            continue;
+        }
+
+        if ($global_open === null || $o < $global_open) {
+            $global_open = $o;
+        }
+        if ($global_close === null || $c > $global_close) {
+            $global_close = $c;
         }
     }
+
+    // Fallback si jamais rien n'est configuré
+    if ($global_open === null || $global_close === null || $global_open >= $global_close) {
+        $global_open  = $planning['open_time'] ?? '10:00';
+        $global_close = $planning['close_time'] ?? '20:00';
+    }
+
+    $time_slots = [];
+    $start = DateTime::createFromFormat('H:i', $global_open, $tz);
+    $end   = DateTime::createFromFormat('H:i', $global_close, $tz);
+
+    if ($start && $end && $start < $end) {
+        $cursor = clone $start;
+        while ($cursor < $end) {
+            $time_slots[] = $cursor->format('H:i');
+            $cursor->modify("+{$interval} minutes");
+        }
+    }
+
+    // Délai minimum
+    $min_delay_minutes = isset($planning['min_delay_minutes'])
+        ? max(0, (int) $planning['min_delay_minutes'])
+        : 0;
+
+    $now_ts = current_time('timestamp');
 
     ?>
     <div class="bs-booking-step bs-booking-step-2">
@@ -1091,18 +1361,18 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
                         ];
 
                         $mois = [
-                            'Jan' => 'Jan',
-                            'Feb' => 'Fév',
-                            'Mar' => 'Mar',
-                            'Apr' => 'Avr',
+                            'Jan' => 'Jan.',
+                            'Feb' => 'Fév.',
+                            'Mar' => 'Mars',
+                            'Apr' => 'Avr.',
                             'May' => 'Mai',
                             'Jun' => 'Juin',
-                            'Jul' => 'Juil',
-                            'Aug' => 'Août',
-                            'Sep' => 'Sep',
-                            'Oct' => 'Oct',
-                            'Nov' => 'Nov',
-                            'Dec' => 'Déc'
+                            'Jul' => 'Juil.',
+                            'Aug' => 'Août.',
+                            'Sep' => 'Sep.',
+                            'Oct' => 'Oct.',
+                            'Nov' => 'Nov.',
+                            'Dec' => 'Déc.'
                         ];
 
                         ?>
@@ -1122,24 +1392,42 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
                             <div class="bs-booking-grid-row">
                                 <?php foreach ($days as $day) : ?>
                                     <?php
-                                    $date_str       = $day->format('Y-m-d');
+                                    $date_str = $day->format('Y-m-d');
+                                    $weekday  = $day->format('N'); // 1..7
 
+                                    $conf = $day_hours[$weekday] ?? null;
+                                    $day_open  = $conf['open']  ?? $global_open;
+                                    $day_close = $conf['close'] ?? $global_close;
+
+                                    // 1) Le créneau fait-il partie de la plage de ce jour ?
+                                    $within_day_hours = ($slot_time >= $day_open && $slot_time < $day_close);
+
+                                    // 2) Calcul du timestamp du créneau pour le délai mini
+                                    $slot_ts = strtotime($date_str . ' ' . $slot_time);
+                                    $too_soon = false;
+                                    if ($min_delay_minutes > 0 && $slot_ts !== false) {
+                                        $threshold_ts = $now_ts + ($min_delay_minutes * 60);
+                                        if ($slot_ts < $threshold_ts) {
+                                            $too_soon = true;
+                                        }
+                                    }
+
+                                    // 3) Disponibilité liée aux réservations
                                     if ($staff_id > 0) {
-                                        // Contrôle strict : on vérifie que ce collaborateur n'est pas déjà pris
                                         $slot_available = barbershop_is_slot_available($date_str, $slot_time, $duration, $staff_id);
-                                    }
-                                    else if (count($collaborators) === 1) {
-                                        $staff_id = array_shift($collaborators)->ID;
-                                        // Contrôle strict : on vérifie s'il n'y a qu'un seul collaborateur mais non selectionné
-                                        $slot_available = barbershop_is_slot_available($date_str, $slot_time, $duration, $staff_id);
-                                    }
-
-                                    else {
-                                        // "Sans préférence" : on ne bloque pas côté affichage
-                                        // (la vérification se fera surtout au moment de la soumission finale)
+                                    } elseif (count($collaborators) === 1) {
+                                        // Cas "un seul collab"
+                                        $only = reset($collaborators);
+                                        $auto_staff_id = $only->ID;
+                                        $slot_available = barbershop_is_slot_available($date_str, $slot_time, $duration, $auto_staff_id);
+                                    } else {
                                         $slot_available = true;
                                     }
 
+                                    // 4) Appliquer délai minimum + plage horaire jour
+                                    if ($too_soon || !$within_day_hours) {
+                                        $slot_available = false;
+                                    }
                                     ?>
                                     <div class="bs-booking-grid-cell">
                                         <?php if ($slot_available) : ?>
@@ -1156,8 +1444,8 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
                                             </form>
                                         <?php else : ?>
                                             <span class="bs-slot-unavailable">
-                                                <?php echo esc_html(substr($slot_time, 0, 5)); ?>
-                                            </span>
+                        <?php echo esc_html(substr($slot_time, 0, 5)); ?>
+                    </span>
                                         <?php endif; ?>
                                     </div>
                                 <?php endforeach; ?>
@@ -1631,6 +1919,121 @@ function barbershop_reservation_conflict_admin_notice() {
         <?php
     }
 }
+
+function barbershop_current_user_has_role($role) {
+    if (!is_user_logged_in()) {
+        return false;
+    }
+    $user = wp_get_current_user();
+    return in_array($role, (array) $user->roles, true);
+}
+
+add_action('admin_menu', 'barbershop_restrict_admin_menu', 999);
+function barbershop_restrict_admin_menu() {
+
+    // Collaborateur : interface ultra simplifiée
+    if (barbershop_current_user_has_role('collaborateur')) {
+
+        // On cache quasiment tout
+        remove_menu_page('index.php');                  // Tableau de bord
+        remove_menu_page('edit.php');                   // Articles
+        remove_menu_page('upload.php');                 // Médias
+        remove_menu_page('edit.php?post_type=page');    // Pages
+        remove_menu_page('edit-comments.php');          // Commentaires
+        remove_menu_page('themes.php');                 // Apparence
+        remove_menu_page('plugins.php');                // Extensions
+        remove_menu_page('tools.php');                  // Outils
+        remove_menu_page('options-general.php');        // Réglages
+        remove_menu_page('edit.php?post_type=bs_prestation'); // Prestations
+
+        // On enlève le menu "Utilisateurs" (mais le profil reste accessible via /profile.php)
+        remove_menu_page('users.php');
+
+        // Le menu "Réservations" (bs_reservation) reste visible grâce aux caps
+    }
+}
+
+add_action('admin_init', 'barbershop_restrict_admin_screens');
+function barbershop_restrict_admin_screens() {
+    if (!barbershop_current_user_has_role('collaborateur')) {
+        return;
+    }
+
+    // Autoriser seulement :
+    // - la liste des réservations
+    // - l'édition/création de réservation
+    // - la page "Profil"
+    $screen = get_current_screen();
+    if (!$screen) {
+        return;
+    }
+
+    $allowed_screens = [
+        'profile',                       // profil utilisateur
+        'profile-network',               // (multisite éventuel)
+        'edit-bs_reservation',           // liste des réservations
+        'bs_reservation',                // écran d'édition d'une réservation
+    ];
+
+    if (!in_array($screen->id, $allowed_screens, true)) {
+        wp_redirect(admin_url('edit.php?post_type=bs_reservation'));
+        exit;
+    }
+}
+
+add_action('admin_bar_menu', 'barbershop_customize_admin_bar', 999);
+function barbershop_customize_admin_bar($wp_admin_bar) {
+    if (!barbershop_current_user_has_role('collaborateur')) {
+        return;
+    }
+
+    // On enlève quelques noeuds "global"
+    $wp_admin_bar->remove_node('new-content');   // + Nouveau
+    $wp_admin_bar->remove_node('comments');      // Commentaires
+    $wp_admin_bar->remove_node('updates');       // Mises à jour
+    // Tu peux en enlever d'autres si tu veux
+}
+
+function barbershop_is_booking_context() {
+    // 1) Si on a des paramètres du booking dans l’URL
+    if (!empty($_GET['bs_step']) || !empty($_GET['bs_prestation']) || !empty($_GET['bs_staff'])) {
+        return true;
+    }
+
+    // 2) Si la page courante contient le shortcode [barbershop_booking]
+    if (is_singular()) {
+        global $post;
+        if ($post instanceof WP_Post && has_shortcode($post->post_content ?? '', 'barbershop_booking')) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+add_filter('nav_menu_css_class', 'barbershop_mark_rdv_menu_active', 10, 3);
+function barbershop_mark_rdv_menu_active($classes, $item, $args) {
+
+    // On ne fait ça que si on est dans le contexte réservation
+    if (!barbershop_is_booking_context()) {
+        return $classes;
+    }
+
+    // On ne touche qu’aux items marqués avec la classe CSS "barbershop-rdv-link"
+    if (in_array('barbershop-rdv-link', (array) $classes, true)) {
+
+        // On ajoute les mêmes classes que WordPress utilise pour l’item courant
+        if (!in_array('current-menu-item', $classes, true)) {
+            $classes[] = 'current-menu-item';
+        }
+        if (!in_array('current_page_item', $classes, true)) {
+            $classes[] = 'current_page_item';
+        }
+    }
+
+    return $classes;
+}
+
 
 
 
