@@ -150,6 +150,7 @@
     background: #f9fafb;
     cursor: pointer;
     white-space: nowrap;
+    color: #111827;
 }
 
 .bs-staff-option:hover {
@@ -249,6 +250,7 @@
     font-size: .9rem;
     background: #f9fafb;
     cursor: pointer;
+    color: #111827;
 }
 
 .bs-slot-btn:hover {
