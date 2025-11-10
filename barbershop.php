@@ -1595,7 +1595,9 @@ function barbershop_booking_handle_submit() {
         $slot_still_available = barbershop_is_slot_available($date, $time, $duration, $staff_id);
 
         if (!$slot_still_available) {
-            return '<p class="bs-booking-step-confirm"> Le créneau choisi est déjà pris pour ce prestataire. Veuillez choisir un autre créneau. </p><br><a href="'
+            return '<p class="bs-booking-step-confirm"> 
+Le créneau choisi est déjà pris pour ce prestataire. Veuillez svp choisir un autre créneau. </p><br>
+<a href="'
                 . esc_url(add_query_arg(['bs_step' => 2, 'bs_prestation' => $prestation_id, 'bs_staff' => $staff_id,], barbershop_booking_get_current_page_url() ))
                 . '" class="bs-btn">Changer de créneau</a>';
         }
@@ -1673,7 +1675,14 @@ function barbershop_booking_handle_submit() {
     ob_start();
     ?>
     <div class="bs-booking-step bs-booking-step-confirm">
-        <h3>Votre demande de rendez-vous a bien été enregistrée</h3>
+        <h3>Merci pour votre reservation !</h3>
+        <p>Votre demande de rendez-vous a bien été enregistrée.
+            <br>
+            Vous allez recevoir un email de confirmation. Il pourrait s'être glissé dans le dossier spam, veuillez y jeter un coup d'oeil si besoin.
+        </p>
+        <p>
+            L'équipe PlaisirBarber90
+        </p>
     </div>
     <?php
     return ob_get_clean();
