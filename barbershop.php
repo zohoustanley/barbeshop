@@ -501,7 +501,7 @@ function barbershop_save_reservation_meta($post_id) {
 
 function barbershop_get_planning_defaults() {
     return [
-        'days_ahead'        => 30,        // nombre de jours à afficher
+        'days_ahead'        => 14,        // nombre de jours à afficher
         'open_time'         => '10:00',   // (fallback) heure d'ouverture globale
         'close_time'        => '20:00',   // (fallback) heure de fermeture globale
         'slot_interval'     => 30,        // minutes (15, 30, 60, etc.)
@@ -509,13 +509,13 @@ function barbershop_get_planning_defaults() {
         'min_delay_minutes' => 180,
         'day_hours'         => [
             // 1 = lundi, etc.
-            '1' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '1' => ['enabled' => false,  'open' => '10:00', 'close' => '20:00'],
             '2' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
             '3' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
             '4' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
             '5' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
-            '6' => ['enabled' => true,  'open' => '10:00', 'close' => '18:00'],
-            '7' => ['enabled' => false, 'open' => '10:00', 'close' => '18:00'],
+            '6' => ['enabled' => true,  'open' => '10:00', 'close' => '20:00'],
+            '7' => ['enabled' => true, 'open' => '11:00', 'close' => '19:00'],
         ],
     ];
 }
@@ -1674,7 +1674,6 @@ function barbershop_booking_handle_submit() {
     ?>
     <div class="bs-booking-step bs-booking-step-confirm">
         <h3>Votre demande de rendez-vous a bien été enregistrée</h3>
-        <h4>Vous recevrez une confirmation par e-mail une fois que le salon aura validé votre réservation.</h4>
     </div>
     <?php
     return ob_get_clean();
