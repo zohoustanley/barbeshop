@@ -336,6 +336,10 @@ function barbershop_render_reservation_meta($post) {
     $date            = get_post_meta($post->ID, '_barbershop_reservation_date', true);  // format Y-m-d
     $time            = get_post_meta($post->ID, '_barbershop_reservation_time', true);  // format HH:MM
     $duration        = get_post_meta($post->ID, '_barbershop_reservation_duration', true); // minutes (copie de la prestation au moment de la resa)
+    $clientName        = get_post_meta($post->ID, '_barbershop_reservation_client_name', true); // minutes (copie de la prestation au moment de la resa)
+    $clientEmail        = get_post_meta($post->ID, '_barbershop_reservation_client_email', true); // minutes (copie de la prestation au moment de la resa)
+    $clientPhone        = get_post_meta($post->ID, '_barbershop_reservation_client_phone', true); // minutes (copie de la prestation au moment de la resa)
+    $clientNote        = get_post_meta($post->ID, '_barbershop_reservation_client_note', true); // minutes (copie de la prestation au moment de la resa)
 
 
     // Vérification : pas de double réservation pour ce collaborateur sur ce créneau
@@ -426,6 +430,27 @@ function barbershop_render_reservation_meta($post) {
             (Servira plus tard pour empêcher les chevauchements de créneaux.)
         </span>
     </p>
+
+    <p>
+        <label for="barbershop_reservation_client_name"><strong>Nom du client</strong></label>:
+        <label class="strong"><?php echo esc_attr($clientName); ?></label>
+    </p>
+
+    <p>
+        <label for="barbershop_reservation_client_email"><strong>Email du client</strong></label>:
+        <label class="strong"><?php echo esc_attr($clientEmail); ?></label>
+    </p>
+
+    <p>
+        <label for="barbershop_reservation_client_phone"><strong>Télephone du client</strong></label>:
+        <label class="strong"><?php echo esc_attr($clientPhone); ?></label>
+    </p>
+
+    <p>
+        <label for="barbershop_reservation_client_phone"><strong>Notes</strong></label> <br>
+        <textarea class="strong"><?php echo esc_attr($clientNote); ?></textarea>
+    </p>
+
     <?php
 }
 
@@ -1301,27 +1326,28 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
 
         <!-- Choix du collaborateur sous forme de lignes cliquables -->
         <div class="bs-booking-staff-block">
-            <p class="bs-booking-staff-title">Choisir un prestataire <?php if (count($collaborators) > 1 ) : ?>(optionnel) <?php endif; ?> </p>
+<!--            <p class="bs-booking-staff-title">Choisir un prestataire --><?php //if (count($collaborators) > 1 ) : ?><!--(optionnel) --><?php //endif; ?><!-- </p>-->
+            <p class="bs-booking-staff-title">Choisir un prestataire </p>
             <div class="bs-booking-staff-options">
                 <!-- Sans préférence -->
 
-                <?php if (count($collaborators) > 1 ) : ?>
+<!--                <?php /*if (count($collaborators) > 1 ) : */?>
                 <form method="get"
-                      action="<?php echo esc_url($current_url); ?>"
+                      action="<?php /*echo esc_url($current_url); */?>"
                       class="bs-booking-staff-form-inline">
                     <input type="hidden" name="bs_step" value="2">
-                    <input type="hidden" name="page_id" value="<?php echo esc_attr($page_id); ?>">
-                    <input type="hidden" name="bs_prestation" value="<?php echo esc_attr($prestation_id); ?>">
+                    <input type="hidden" name="page_id" value="<?php /*echo esc_attr($page_id); */?>">
+                    <input type="hidden" name="bs_prestation" value="<?php /*echo esc_attr($prestation_id); */?>">
                     <input type="hidden" name="bs_staff" value="0">
                     <button type="submit"
-                            class="bs-staff-option<?php echo empty($staff_id) ? ' bs-staff-option--active' : ''; ?>">
+                            class="bs-staff-option<?php /*echo empty($staff_id) ? ' bs-staff-option--active' : ''; */?>">
                         Sans préférence
                     </button>
                 </form>
-                <?php endif; ?>
+                --><?php /*endif; */?>
 
                 <!-- Chaque collaborateur -->
-                <?php foreach ($collaborators as $user) : ?>
+                <?php foreach ($collaborators as $idx => $user) : ?>
                     <form method="get"
                           action="<?php echo esc_url($current_url); ?>"
                           class="bs-booking-staff-form-inline">
@@ -1330,7 +1356,7 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
                         <input type="hidden" name="bs_prestation" value="<?php echo esc_attr($prestation_id); ?>">
                         <input type="hidden" name="bs_staff" value="<?php echo esc_attr($user->ID); ?>">
                         <button type="submit"
-                                class="bs-staff-option<?php echo ($staff_id == $user->ID) ? ' bs-staff-option--active' : ''; ?>">
+                                class="bs-staff-option<?php echo ( $staff_id == $user->ID || ( ($staff_id == 0 || $staff_id == null ) && $idx === 0 ) ) ? ' bs-staff-option--active' : ''; ?>">
                             <?php echo esc_html($user->first_name); ?>
                         </button>
                     </form>
@@ -1540,7 +1566,7 @@ function barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $d
             </p>
             <p>
                 <label>Téléphone<br>
-                    <input type="text" name="bs_client_phone">
+                    <input type="text" name="bs_client_phone" required>
                 </label>
             </p>
             <p>
