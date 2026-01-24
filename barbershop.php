@@ -1121,11 +1121,10 @@ function barbershop_booking_step1_prestation() {
                                 $pid      = get_the_ID();
                                 $price    = get_post_meta($pid, '_barbershop_prestation_price', true);
                                 $duration = get_post_meta($pid, '_barbershop_prestation_duration', true);
+                                $allowed_staff_ids = barbershop_get_allowed_staff_for_prestation($pid);
 
                                 // 🔍 Filtre par collaborateur présélectionné
                                 if ($staff_id > 0) {
-                                    $allowed_staff_ids = barbershop_get_allowed_staff_for_prestation($pid);
-
                                     // Si la prestation a une liste restreinte ET que ce collaborateur n’y est pas → on saute
                                     if (!empty($allowed_staff_ids) && !in_array($staff_id, $allowed_staff_ids, true)) {
                                         continue;
@@ -1138,7 +1137,7 @@ function barbershop_booking_step1_prestation() {
                                 $url = add_query_arg([
                                     'bs_step'       => 2,
                                     'bs_prestation' => $pid,
-                                    'bs_staff'      => $staff_id,
+                                    'bs_staff'      => !empty($allowed_staff_ids) && $staff_id == 0 ? $allowed_staff_ids[0] : $staff_id,
                                 ], $current_url);
                                 ?>
                                 <article class="bs-booking-prestation-item">
@@ -1348,6 +1347,7 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
 
                 <!-- Chaque collaborateur -->
                 <?php foreach ($collaborators as $idx => $user) : ?>
+                    <?php $staff_id = $staff_id == 0 && $idx == 0 ? $user->ID : $staff_id;  ?>
                     <form method="get"
                           action="<?php echo esc_url($current_url); ?>"
                           class="bs-booking-staff-form-inline">
