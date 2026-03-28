@@ -336,3 +336,18 @@
 .bs-booking-step .bs-booking-step-confirm h3{
     color: #111827 !important;
 }
+
+
+.bs-booking-grid--disabled {
+    opacity: 0.4;
+    pointer-events: none;
+    user-select: none;
+}
+
+.bs-booking-notice {
+    background: #fff8e1;
+    border-left: 4px solid #f59e0b;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    border-radius: 4px;
+}
