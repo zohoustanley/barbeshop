@@ -390,14 +390,12 @@ function barbershop_render_reservation_meta($post) {
     <p>
         <label for="barbershop_reservation_collaborator_id"><strong>Collaborateur / Manager</strong></label><br>
         <select id="barbershop_reservation_collaborator_id" name="barbershop_reservation_collaborator_id" style="width:100%;max-width:320px;">
-            <option value="">— Sans préférence (non assigné)</option>
             <?php foreach ($collaborators as $user) : ?>
                 <option value="<?php echo esc_attr($user->ID); ?>" <?php selected($collaborator_id, $user->ID); ?>>
                     <?php echo esc_html($user->display_name . ' (' . implode(', ', $user->roles) . ')'); ?>
                 </option>
             <?php endforeach; ?>
         </select>
-        <span class="description">Laisser vide pour une réservation sans préférence.</span>
     </p>
 
     <p>
@@ -1028,7 +1026,7 @@ function barbershop_booking_shortcode($atts) {
     // Déterminer l'étape
     $step          = isset($_REQUEST['bs_step']) ? intval($_REQUEST['bs_step']) : 1;
     $prestation_id = isset($_REQUEST['bs_prestation']) ? intval($_REQUEST['bs_prestation']) : 0;
-    $staff_id      = isset($_REQUEST['bs_staff']) ? intval($_REQUEST['bs_staff']) : 0;
+    $staff_id      = intval($_REQUEST['bs_staff']);
     $date          = isset($_REQUEST['bs_date']) ? sanitize_text_field($_REQUEST['bs_date']) : '';
     $time          = isset($_REQUEST['bs_time']) ? sanitize_text_field($_REQUEST['bs_time']) : '';
 
@@ -1043,9 +1041,9 @@ function barbershop_booking_shortcode($atts) {
 
     if ($step <= 1) {
         barbershop_booking_step1_prestation();
-    } elseif ($step === 2 && $prestation_id) {
+    } elseif ($step === 2 && $prestation_id && $staff_id) {
         barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $date, $time);
-    } elseif ($step === 3 && $prestation_id && $date && $time) {
+    } elseif ($step === 3 && $prestation_id && $date && $time && $staff_id) {
         barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $date, $time);
     } else {
         // fallback → revenir à l'étape 1
@@ -1062,7 +1060,7 @@ function barbershop_booking_shortcode($atts) {
  */
 function barbershop_booking_step1_prestation() {
     $current_url = barbershop_booking_get_current_page_url();
-    $staff_id    = isset($_GET['bs_staff']) ? intval($_GET['bs_staff']) : 0;
+    $staff_id    = isset($_GET['bs_staff']) ? intval($_GET['bs_staff']) : null;
 
     // Récupérer les catégories de prestations
     $categories = get_terms([
@@ -1124,7 +1122,7 @@ function barbershop_booking_step1_prestation() {
                                 $allowed_staff_ids = barbershop_get_allowed_staff_for_prestation($pid);
 
                                 // 🔍 Filtre par collaborateur présélectionné
-                                if ($staff_id > 0) {
+                                if ($staff_id && $staff_id > 0) {
                                     // Si la prestation a une liste restreinte ET que ce collaborateur n’y est pas → on saute
                                     if (!empty($allowed_staff_ids) && !in_array($staff_id, $allowed_staff_ids, true)) {
                                         continue;
@@ -1137,7 +1135,7 @@ function barbershop_booking_step1_prestation() {
                                 $url = add_query_arg([
                                     'bs_step'       => 2,
                                     'bs_prestation' => $pid,
-                                    'bs_staff'      => !empty($allowed_staff_ids) && $staff_id == 0 ? $allowed_staff_ids[0] : $staff_id,
+                                    'bs_staff'      => !empty($allowed_staff_ids) && $staff_id == null ? $allowed_staff_ids[0] : $staff_id,
                                 ], $current_url);
                                 ?>
                                 <article class="bs-booking-prestation-item">
@@ -1325,25 +1323,8 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
 
         <!-- Choix du collaborateur sous forme de lignes cliquables -->
         <div class="bs-booking-staff-block">
-<!--            <p class="bs-booking-staff-title">Choisir un prestataire --><?php //if (count($collaborators) > 1 ) : ?><!--(optionnel) --><?php //endif; ?><!-- </p>-->
             <p class="bs-booking-staff-title">Choisir un prestataire </p>
             <div class="bs-booking-staff-options">
-                <!-- Sans préférence -->
-
-<!--                <?php /*if (count($collaborators) > 1 ) : */?>
-                <form method="get"
-                      action="<?php /*echo esc_url($current_url); */?>"
-                      class="bs-booking-staff-form-inline">
-                    <input type="hidden" name="bs_step" value="2">
-                    <input type="hidden" name="page_id" value="<?php /*echo esc_attr($page_id); */?>">
-                    <input type="hidden" name="bs_prestation" value="<?php /*echo esc_attr($prestation_id); */?>">
-                    <input type="hidden" name="bs_staff" value="0">
-                    <button type="submit"
-                            class="bs-staff-option<?php /*echo empty($staff_id) ? ' bs-staff-option--active' : ''; */?>">
-                        Sans préférence
-                    </button>
-                </form>
-                --><?php /*endif; */?>
 
                 <!-- Chaque collaborateur -->
                 <?php foreach ($collaborators as $idx => $user) : ?>
@@ -1447,7 +1428,7 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
                                         $auto_staff_id = $only->ID;
                                         $slot_available = barbershop_is_slot_available($date_str, $slot_time, $duration, $auto_staff_id);
                                     } else {
-                                        $slot_available = true;
+                                        $slot_available = false;
                                     }
 
                                     // 4) Appliquer délai minimum + plage horaire jour
@@ -1508,7 +1489,10 @@ function barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $d
     $duration = intval(get_post_meta($prestation_id, '_barbershop_prestation_duration', true)) ?: 30;
     $price    = get_post_meta($prestation_id, '_barbershop_prestation_price', true);
     $staff    = $staff_id ? get_user_by('id', $staff_id) : null;
-
+    if( $staff === null ){
+        echo '<p>Prestataire introuvable.</p>';
+        return;
+    }
     // Formatage date/heure sécurisé
     $timestamp = strtotime($date . ' ' . $time);
     ?>
@@ -1535,8 +1519,6 @@ function barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $d
                 <?php
                 if ($staff) {
                     echo esc_html($staff->first_name);
-                } else {
-                    echo 'Sans préférence';
                 }
                 ?>
             </p>
@@ -1612,21 +1594,23 @@ function barbershop_booking_handle_submit() {
     }
 
     $prestation_id = intval($_POST['bs_prestation'] ?? 0);
-    $staff_id      = intval($_POST['bs_staff'] ?? 0);
+    if (!isset($_POST['bs_staff'])) {
+        return '<p class="bs-booking-step-confirm"> Aucun prestataire selectionné. Veuillez svp en choisir un. </p><br><a href="'
+            . esc_url(add_query_arg(['bs_step' => 2, 'bs_prestation' => $prestation_id], barbershop_booking_get_current_page_url() ))
+            . '" class="bs-btn">Choisir un prestataire</a>';
+    }
+
+    $staff_id      = intval($_POST['bs_staff']);
     $date          = sanitize_text_field($_POST['bs_date'] ?? '');
     $time          = sanitize_text_field($_POST['bs_time'] ?? '');
     $duration      = intval($_POST['bs_duration'] ?? 0);
-
-    if ($staff_id > 0) {
-        $slot_still_available = barbershop_is_slot_available($date, $time, $duration, $staff_id);
-
-        if (!$slot_still_available) {
-            return '<p class="bs-booking-step-confirm"> 
+    $slot_still_available = barbershop_is_slot_available($date, $time, $duration, $staff_id);
+    if (!$slot_still_available) {
+        return '<p class="bs-booking-step-confirm"> 
 Le créneau choisi est déjà pris pour ce prestataire. Veuillez svp choisir un autre créneau. </p><br>
 <a href="'
-                . esc_url(add_query_arg(['bs_step' => 2, 'bs_prestation' => $prestation_id, 'bs_staff' => $staff_id,], barbershop_booking_get_current_page_url() ))
-                . '" class="bs-btn">Changer de créneau</a>';
-        }
+            . esc_url(add_query_arg(['bs_step' => 2, 'bs_prestation' => $prestation_id, 'bs_staff' => $staff_id,], barbershop_booking_get_current_page_url() ))
+            . '" class="bs-btn">Changer de créneau</a>';
     }
 
     $client_name   = sanitize_text_field($_POST['bs_client_name'] ?? '');
