@@ -1030,7 +1030,7 @@ function barbershop_booking_shortcode($atts) {
     // Déterminer l'étape
     $step          = isset($_REQUEST['bs_step']) ? intval($_REQUEST['bs_step']) : 1;
     $prestation_id = isset($_REQUEST['bs_prestation']) ? intval($_REQUEST['bs_prestation']) : 0;
-    $staff_id      = intval($_REQUEST['bs_staff']);
+    $staff_id = isset($_REQUEST['bs_staff']) ? intval($_REQUEST['bs_staff']) : null;
     $date          = isset($_REQUEST['bs_date']) ? sanitize_text_field($_REQUEST['bs_date']) : '';
     $time          = isset($_REQUEST['bs_time']) ? sanitize_text_field($_REQUEST['bs_time']) : '';
 
@@ -1045,7 +1045,7 @@ function barbershop_booking_shortcode($atts) {
 
     if ($step <= 1) {
         barbershop_booking_step1_prestation();
-    } elseif ($step === 2 && $prestation_id && $staff_id) {
+    } elseif ($step === 2 && $prestation_id) {
         barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $date, $time);
     } elseif ($step === 3 && $prestation_id && $date && $time && $staff_id > 0) {
         barbershop_booking_step3_summary_and_form($prestation_id, $staff_id, $date, $time);
@@ -1362,7 +1362,7 @@ function barbershop_booking_step2_staff_and_slot($prestation_id, $staff_id, $sel
         <!-- Titre choix créneau -->
         <h3 class="bs-booking-slot-title">Choisir un créneau</h3>
 
-        <?php if ($staff_id <= 0) : ?>
+        <?php if ($staff_id <= 0 || $staff_id === null) : ?>
             <div class="bs-booking-notice">
                 <p>⚠️ Veuillez d'abord sélectionner un prestataire ci-dessus pour voir les créneaux disponibles.</p>
             </div>
