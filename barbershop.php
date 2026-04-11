@@ -2,7 +2,7 @@
 /*
 Plugin Name: Barbershop
 Description: Rôles, prestations et réservations pour la gestion du barbershop.
-Version: 1.0.0
+Version: 1.2.0
 Author: Yannick Zohou
 Text Domain: barbershop
 */
